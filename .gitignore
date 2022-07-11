@@ -1,0 +1,14 @@
+# vcode
+*.vscode/*
+*.code-workspace
+
+# compilador tex (not clean)
+lecture-notes/tex2pdf.*
+
+# Ignorar pdf generados por el makefile
+**/print
+
+# Ignore everything in workspace/labxxxxx
+workspace/lab*/*
+# But not these files...
+!.gitkeep
