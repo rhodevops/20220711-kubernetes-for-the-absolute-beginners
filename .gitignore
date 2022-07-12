@@ -8,6 +8,9 @@ lecture-notes/tex2pdf.*
 # Ignorar pdf generados por el makefile
 **/print
 
+# Documents
+docs/
+
 # Ignore everything in workspace/labxxxxx
 workspace/lab*/*
 # But not these files...
