@@ -202,6 +202,251 @@ Notas:
 - El último comando mencionado, inicia el cluster de minikube, creando una vm en Virtual Box.
 - Es importante instalar `kubectl` antes que minikube.
 
+### Algunos comandos
+
+Con el cluster iniciado, se utilizan los siguiente comandos:
+
+```bash
+minikube status
+kubectl get pods -A
+kubectl get pods
+kubecetl cluster-info
+```
+
+Se despliega un `hello-minikube`. Consultar los `<flags>` no especificados de los siguiente comandos en la documentación oficial:
+
+```
+kubectl create deployment hello-miinilube <flag>
+kubectl get pods
+kubectl get deployments
+kubectl get pods
+kubectl expose deployment hello-miinilube --type=NodePort --pot=8080
+kubectl get services
+```
+
+Si se elimina un pod, `kubectl delete pods <name>` , se vuelve a crear automáticamente. Para eliminar lo que se ha desplegado:
+
+```bash
+kubectl delete deployments <name>
+kubectl delete services <name>
+```
+
+# Conceptos de kubernetes
+
+## ¿Qué es un pod?
+
+Un `pod` es el objeto más pequeño que kubernetes puede crear/desplegar.
+
+Supongamos el siguiente punto de partida:
+
+- Tenemos una aplicación desarrollada y construída en una imagen de docker disponible en un repo.
+- Tenemos un cluster de kubernetes configurado.
+
+Kubernetes no hace el despliegue directamente a los nodos worker, sino que encapsula los contenedores en un objeto de kubernetes llamado `pod`.
+
+Un `pod` es una instancia unitaria (single instance) de una aplicación. Es el objeto más pequeño que kubernetes puede crear.
+
+Imaginamos que tenemos una aplicación ejecutandose en un cluster de kubernetes de un solo nodo, en un único contenedor encapsulado en un pod. ¿Cómo se escala la aplicación?
+
+Para escalar una aplicación en kubernetes, se necesita crear una nueva instancia de la aplicación, de modo que comparta la carga de trabajo con la primera. ¿Cómo se hace esto? Creando un nuevo pod junto a una nueva instancia de la misma aplicación. Así, tenemos dos intancias de la misma aplicación ejecutandose en dos pods separados dentro de un mismo nodo. 
+
+Si hay que escalar más, también se puede añadir un nuevo nodo al cluster y crear nuevos pods dentro de este segundo nodo. 
+
+Aunque la relación 1/1 entre pods y containers es muy frecuente, existen los llamados pods multi-conainer.
+
+Un `multi-container pod` es un pod que contiene más de un contenedor. Es importante tener claro que los contenedores dentro de un pod no son nunca iguales (el escalado siempre se hace creando nuevos pods). 
+
+En muchas ocasiones, estos contenedores "extra" del pod son `helper containers` o contenedores de ayuda, que prestan algun tipo de soporte al contenedor "principal" del pod. 
+
+Los contenedores de un mismo pod:
+
+- Nacen y mueren juntos.
+- Se comunican directamente referenciándose como local host.
+- Comparten el mismo espacio de red (network space).
+- Tienen la misma dirección IP.
+- Pueden compartir también el mismo espacio de almacenamiento.
+
+### ¿Por qué son útiles los pods?
+
+Estamos desarrollando un proceso o script que despliega una aplicación en un Docker host. El siguiente comando levanta un contendor a partir de una imagen de la aplicación:
+
+```bash
+docker run python-app
+```
+
+Para escalar la aplicación, desplegamos nuevas intancias de la aplicación levantando más contenedores:
+
+```bash
+docker run python-app
+docker run python-app
+docker run python-app
+docker run python-app
+```
+
+Ahora vamoms a imaginar un escenario de futuro en el que la aplicación cambia e incrementa su complejidad. Ahora tenemos un `helper container` que da soporte a la aplicación y se encarga de procesar o extraer datos de otros sitios. Estos nuevos contenedores mantienen una relación 1/1 con los contenedores de la aplicación y además necesitan comunicarse directamente con ellos. 
+
+```bash
+docker run helper -link app1
+docker run helper -link app2
+docker run helper -link app3
+docker run helper -link app4
+```
+
+Se necesita todo lo siguiente:
+
+- Un mapa de conexión `appContainer: helpContainer` .
+- Establecer una conexión de red (network connectivity).
+- Crear volúmenes compartidos.
+- Monitorizar el estado de los `appContainer` y, cuando muera, matar manualmente su `helpContainer` .
+- Desplegar de manera conjunta el `appContainer` junto a su `helpContainer` .
+
+El poder de Kubernetes es que hace todo lo anterior de manera automática.
+
+## kubectl
+
+El siguiente comando
+
+```bash
+kubnectl run nginx --image nginx
+```
+
+despliega un contenedor de docker creando un pod a partir de la imagen indicada. Se puede configurar el repositorio del que se extraen las imágenes.
+
+Mediante el comando `kubectl get pods` , se lista los pods de un cluster. 
+
+El ejemplo de `nginx` sirve para plantear algunos temas importante, que se verán más adelante:
+
+- ¿Cómo se puede acceder al nginx web server?
+- Acceso al web server para usuarios externos.
+- Acceso interno desde el nodo.
+- Networking & Services.
+- Exponer un servicio.
+
+## Demo. Pods
+
+Con el cluster iniciado, se utilizan los siguiente comandos:
+
+```bash
+kubnectl run nginx --image nginx
+kubnectl get pods
+kubectl run nginx --image=nginx
+kubectl run nginx --image=nginx
+kubnectl describe pods
+kubnectl get pods -o wide
+```
+
+# Introducción a los YAML
+
+## Archivos YAML frente a otros formatos
+
+Los archivos `YAML`, al igual que los `xml` y `json`, se utilizan para representar datos. En este ccontexto, datos de configuración.
+
+Veamos la forma de representar un mismo conjunto de datos en los formatos mencionados:
+
+```xml
+<Servers>
+    <Server>
+        <name>Server1</name>
+        <owner>John</owner>
+        <created>12232012</created>
+        <status>active</status>
+    </Server>
+</Servers>
+```
+
+```json
+{
+    Servers: [
+        {
+        name: Server1,
+        owner: John,
+        created: 12232012,
+        status: active,
+         }
+    ]
+}
+```
+
+```yaml
+  Servers: 
+    - name: Server1
+      owner: John
+      created: 12232012
+      status: active
+```
+
+## Representación de tipos
+
+En general, en muchos lenguajes de programación:
+
+- Las llaves `{ }` encierran diccionarios. El orden no importa.
+- Los corchete `[ ]` encierran listas. El orden importa.
+
+### Key Value Pair
+
+Los datos representados en un YAML siguen la estructura `clave` - `valor` de los mapas o diccionarios. Sin embargo, pueden tener anidados
+
+Por ejemplo:
+
+```yaml
+Fruit: Apple
+Vegetable: Carrot
+Liquid: Water
+Meat: Chiken
+```
+
+### Array/Lists
+
+Los guiones `-` anteceden los elementos que forman parte de una lista. Las listas son objetos ordenados.
+
+Una lista de frutas y una lista de verduras. La manzana es el primer elemento de la lista de frutas:
+
+```yaml
+Fruits: 
+  - Apple
+  - Orange
+  - Banana
+
+Vegetables: 
+  - Carrot
+  - Cauliflower
+  - Tomato
+```
+
+### Dictionary/Map
+
+Un archivo YAML suele tener varios niveles o anidaciones. El valor de una clave puede ser un diccionario.
+
+El valor de `Banana` es el diccionario `{}`
+
+```yaml
+Banana:
+  Calories: 105
+  Fat: 0.4 g
+  Carbs: 27 g
+
+Grapes:
+  Calories: 62
+  Fat: 0.3 g
+  Carbs: 16 g
+```
+
+## Espacios en un YAML
+
+Los espacios son muy importantes en un `YAML` porque indican el nivel jerarquico de la propiedad. Por ejemplo, en el siguiente YAML, `Fat` y `Carbs` son propiedades de `Calories` que a su vez es una propiedad de `Banana`.
+
+```yaml
+Banana:
+  Calories: 105
+    Fat: 0.4 g
+    Carbs: 27 g
+```
+
+## Diccionarios, listas y listas de diccionarios
+
+
+
+
 
 
 
