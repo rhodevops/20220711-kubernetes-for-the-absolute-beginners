@@ -12,6 +12,6 @@ lecture-notes/tex2pdf.*
 docs/
 
 # Ignore everything in workspace/labxxxxx
-workspace/lab*/*
+# workspace/demo*/*
 # But not these files...
 !.gitkeep
