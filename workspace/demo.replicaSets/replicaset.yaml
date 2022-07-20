@@ -7,13 +7,13 @@ metadata:
 spec:
   selector:
     matchLabels:
-      env: myapp
+      app: myapp
   replicas: 3
   template:
     metadata: 
       name: nginx-2
       labels:
-        env: myapp
+        app: myapp
     spec:
       containers:
         - name: nginx
