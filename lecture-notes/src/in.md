@@ -384,9 +384,9 @@ En general, en muchos lenguajes de programación:
 
 ### Key Value Pair
 
-Los datos representados en un YAML siguen la estructura `clave` - `valor` de los mapas o diccionarios. Sin embargo, pueden tener anidados
+Los datos representados en un YAML siguen la estructura `clave` - `valor` de los mapas o diccionarios. El valor de una clave pueden ser un string, una lista u otro diccionario.
 
-Por ejemplo:
+En este ejemplo, los valores son strings:
 
 ```yaml
 Fruit: Apple
@@ -397,9 +397,9 @@ Meat: Chiken
 
 ### Array/Lists
 
-Los guiones `-` anteceden los elementos que forman parte de una lista. Las listas son objetos ordenados.
+Los guiones `-` anteceden los elementos que forman parte de una lista. 
 
-Una lista de frutas y una lista de verduras. La manzana es el primer elemento de la lista de frutas:
+En el siguiente YAML se representa una lista de frutas y otra de verduras. El orden importa, el tomata es el tercer elemento de la lista de verduras:
 
 ```yaml
 Fruits: 
@@ -415,9 +415,7 @@ Vegetables:
 
 ### Dictionary/Map
 
-Un archivo YAML suele tener varios niveles o anidaciones. El valor de una clave puede ser un diccionario.
-
-El valor de `Banana` es el diccionario `{}`
+El valor de `Banana` es un diccionario.
 
 ```yaml
 Banana:
@@ -442,7 +440,329 @@ Banana:
     Carbs: 27 g
 ```
 
-## Diccionarios, listas y listas de diccionarios
+## Lista de diccionarios
+
+Es bastante habitual que un YAML contenga una lista de diccionarios:
+
+```yaml
+- Date: 20220710
+  Activity: Run
+  Time: 3000
+- Date: 20220712
+  Activity: Swim
+  Time: 2500
+```
+
+# Conceptos de kubernetes: Pods, ReplicaSets, Deployments
+
+## Pods con YAML
+
+Kubernetes utiliza YAMLs como inputs para crear objetos como pods, replicas, deployments services, etc.
+
+Todos los archivos de definición de Kubernetes siguien una estructura basada en cuatro campos o propieades de nivel superior, llamado en inglés `top level` o `root level properties`
+
+```yaml
+# kubernetes-objetc.yaml
+apiVersion:
+kind:
+metadata:
+
+spec:
+```
+
+Tenemos:
+
+- `apiVersion`
+- `Kind` tipo de objeto de kubernetes
+- `metadata`
+- `spec`
+
+Por ejemplo: 
+
+```yaml
+# pod-definition.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+    type: front-end
+
+spec:
+  containers:
+    - name: nginx-container
+      image: nginx
+```
+
+Notas:
+
+- `apiVersion` y `Kind` son strings
+- `metadata` y `spec` son diccionarios
+- `name` y `labels` son childrens de `metadata`
+- `metadata.labels` es un diccionario
+- `spec.containers` es una lista/array (de diccionarios). El primer (y único) item es un diccionario con dos propiedades, `name` e `image`.
+
+La razón de que `spec.containers` sea un array es que los pods pueden contener más de un contenedor.
+
+Para crear el pod utilizando los datos del YAML se ejecuta:
+
+```bash
+kubectl create -f pod-definition.yaml
+```
+
+o
+
+```bash
+kubectl apply -f pod-definition.yaml
+```
+
+Normalmente, el segundo comando se ejecuta sobre objetos que ya se han creado y se quieren aplicar los nuevos cambios de un archivo YAML modificado.
+
+## Demo. Pods with YAML
+
+Directorio: `./workspace/demo.pods-with-yaml`
+
+Laboratorio:
+
+- Crear un YAML con los datos necesarios para crear un pod
+- Hacer el create/apply para crear el pod cogiendo los datos del YAML
+
+## Tips & Tricks. Desarrollar manifiestos de Kubernetes con VS Code 
+
+Utilizar la extensión `YAML` de `Red Hat` con la configuración siguiente:
+
+```json
+"yaml.schemas": {
+  
+  "kubernetes": "*.yaml*"
+
+}
+```
+
+## Lab. Pods with YAML
+
+Algunos comando útiles:
+
+```bash
+kubectl get pods
+kubectl describe pod <pod name> | grep -i image
+kubectl get pods -o wide #muestra nodos
+```
+
+## Replication Controller y Replica Sets
+
+### Controllers
+
+Los `controllers` son los cerebros de kubernetes. Se encargan de monitorizar los objetos de kubernetes y dar respuestas acordes. En esta sección vamos a ver, en particular, el `ReplicationController`.
+
+### Replicas
+
+Antes de entrar en los detalles del ReplicationController, necesitamos hablar de un concepto fundamental en kubernetes. ¿Qué es una `replica` y para que sirve? Imaginemos que por algun motivo nuesta apicación se rompe. Para asegurarnos que los usuarios pueden acceder a la aplicación, hay que tener más de una instancia o pod ejecutandose al mismo tiempo. Estos pods son iguales, es decir, son replicas.  
+
+### Replication Controller
+
+El `ReplicationController` es el controlador que se encarga de que siempre exista un número deseado de pods ejecutándose al mismo tiempo.
+
+El Replication Controller también es responsable del **balanceado de carga** y del **escalado** de la aplicación:
+
+- Si la demanda aumenta, se encarga de desplegar nuevos pods para balancear la carga de trabajo sobre los mismos.
+- El balanceo de carga también se aplica sobre los pods de otros nodos dentro del clúster.
+
+### Replica Set vs Replication Controller
+
+El `ReplicaSet` es la nueva tecnología recomnedada para configurar las réplicas. El objetivo que persigue es el mismo que el del Replication Controller.
+
+Hay pequeñas diferencias en la forma de trabajo de ambos tecnologías.
+
+### Definir y crear un Replication Controller
+
+Crear el archivo `rc-definition.yaml`:
+
+```yaml
+# rc-definition.yaml
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: myapp-rc
+  labels:
+    app: myapp
+    type: front-end
+
+spec:
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+    spec:
+      containers:
+        - name: nginx-container
+          image: nginx
+
+  replicas: 3
+```
+
+Observar que `spec.template` es un diccionario que contiene las propiedades que definen el objeto de k8s `Pod` (salvo las propiedades `kind` y `apiVersion`)
+
+Para crear el objeto de k8s, se ejecuta
+
+```bash
+kubectl create -f rc-definition.yaml
+```
+
+Otros comandos:
+
+```bash
+kubectl get replicationcontroller
+kubectl get pods
+```
+
+### Definir y crear un Replica Set
+
+Crear el archivo `rc-definition.yaml`:
+
+```yaml
+# replicaset-definition.yaml
+apiVersion: apps/v1
+kind: ReplicationSet
+metadata:
+  name: myapp-replicaset
+  labels:
+    app: myapp
+    type: front-end
+
+spec:
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+    spec:
+      containers:
+        - name: nginx-container
+          image: nginx
+
+  replicas: 3
+  selector: 
+    matchLabels:
+      type: front-end
+```
+
+Observar que la **gran diferencia** con el ReplicationController es que el ReplicaSet requiere la definición de la propiedad `spec.selector`, que se encarga de indentificar los pods que están bajo el "paraguas" del ReplicaSet. 
+
+Un momento, ¿por qué es necesario hacer esta identificación si ya hemos definido el pod en el YAml? El motivo es que un ReplicaSet puede gestionar pods que no han sido creados en el archivo de definición del ReplicaSet.
+
+Por cierto, la propiedad `spec.selector` también está disponible en un ReplicationController, la diferencia es que en este caso es opcional. 
+
+La propiedad `selector.matchLabels` se encarga de vincular el label especificado con el label del pod.
+
+```bash
+kubectl create -f replicaset-definition.yaml
+```
+
+Otros comandos:
+
+```bash
+kubectl get replicaset
+kubectl get pods
+```
+
+Para borrar el ReplicaSet (también borra todos los pods subyacentes) se ejecuta
+
+```bash
+kubectl delete replicaset myapp-replicaset
+```
+
+### Labels y Selectors
+
+El ReplicaSet es un proceso que monitoriza los pods y los vuelve a crear es caso de que alguno de ellos se rompa.
+
+El `selector` de un ReplicaSet es la propiedad que permite identificar los pods que van a ser monitorizados. 
+
+Aqui un ejemplo reducido:
+
+```yaml
+# replicaset-definition.yaml
+[...]
+spec:
+  selector:
+    matchLabels:
+      tier: front-end
+```
+
+```yaml
+# pod-definition.yaml
+[...]
+metadata:
+  labels:
+    tier: front-end
+```
+
+Este mismo concepto se emplea en otros sitios de Kubernetes.
+
+### Escenario de ejemplo
+
+Tenemos tres replicas de un pod (`tier: front-end`) ejecutándose en un cluster de k8s y queremos crear un ReplicaSet para que monitorice esos pods y los vuelva a crear en caso de caídas.
+
+¿Es necesario en este escenario añadir el `template` de definición de los pods que ya están creados? Si, es necesario. La razón es que cuando alguno de ellos caíga, el ReplicaSet necesita crear el pod caído.
+
+### Escalado del ReplicaSet
+
+Tenemos el siguiente archivo de definición de un ReplicaSet. 
+
+```yaml
+# replicaset-definition.yaml
+apiVersion: apps/v1
+kind: ReplicationSet
+metadata:
+  name: myapp-replicaset
+  labels:
+    app: myapp
+    type: front-end
+
+spec:
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+    spec:
+      containers:
+        - name: nginx-container
+          image: nginx
+
+  replicas: 3
+  selector: 
+    matchLabels:
+      type: front-end
+```
+
+Queremos escalar el número de replicas de 3 a 6. Hay varias opciones para ello:
+
+1. Editar el YAML y ejecutar `kubectl replace -f replicaset-definition.yaml`
+2. Ejecutar `kubectl scale --replica=6 -f replicaset-definition.yaml`
+3. Ejecutar `kubectl scale --replica=6 replicaset myapp-replicaset` donde se ha pasado el `metadata.name` del ReplicaSet
+
+El problema de la opción 3 es que el valor no se modifica de forma automática en el YAML.
+
+Hay otras opciones avanzadas de escalado automático basado en la carga.
+
+## Demo. Replica Sets
+
+
+
+
+
+
+
+
+
+
+
 
 
 
