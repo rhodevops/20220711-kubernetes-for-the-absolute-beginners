@@ -525,8 +525,7 @@ Directorio: `./workspace/demo.pods-with-yaml`
 
 Laboratorio:
 
-- Crear un YAML con los datos necesarios para crear un pod
-- Hacer el create/apply para crear el pod cogiendo los datos del YAML
+- Crear un pod de un nginx utilizando un manifiesto YAML
 
 ## Tips & Tricks. Desarrollar manifiestos de Kubernetes con VS Code 
 
@@ -753,33 +752,146 @@ Hay otras opciones avanzadas de escalado automático basado en la carga.
 
 ## Demo. Replica Sets
 
+Directorio: `./workspace/demo.replicasets`
+
+Laboratorio:
+
+- Levantar tres pods de un nginx a través de un ReplicaSet definido en un YAML.
+- Eliminar un pod y observar que ocurre.
+- Intentar levantar una cuarto pod (replica de los anteriores) utilizando  un manifiesto YAML de tipo `kind: Pod` (debe definirse con el label del ReplicaSet) y observar que ocurre.
+- Escalar el número de replicas de 3 a 4 (con `kubectl edit replicaset <name>`)
+- Escalar el número de replicas de 4 a 2 (con `kubectl scale replicaset <name> --replicas=<number>`)
+
+Observar cuando se haga, que el comando `kubectl scale replicaset <name> --replicas=<number>` modifica el valor `spec.replicas` del archivo temporal correspondiente.
+
+### Editar un ReplicaSet
+
+El siguiente comando permite editar un ReplicaSet:
+
+```bash
+kubectl edit replicaset myapp-replicaset
+```
+
+donde `myapp-replicaset` es el nombre del ReplicaSet.
+
+Se abrirá en el editor por defecto un archivo temporal que k8s crea en la memoría para permitir la edición de un objeto de k8s existente. En este archivo es donde sustuímos el valor 3 de `spec.replicas` por el valor 4 para hacer el escalado.
+
+Tras editar el archivo:
+
+- Si hemos escalado replicas, no hay que hacer nada más
+- Si hemos hecho otros cambios, p.e. modificar la imagen de los contenedores, hay que borrar los pods antiguos para que se generen los nuevos pods actualizados.
+
+Puede ser util cuando:
+
+- No conocemos la ruta de YAML
+- YAML creado por otra persona
 
 
+## Lab. Replica Sets
 
+Algunos comando útiles:
 
+```bash
+kubectl get na
+kubectl get rs
+kubectl get po
+kubectl get rs -o wide #muestra containers, images, selector
+kubectl describe rs
+kubectl edit replicaset <name>
+kubectl scale replicaset <name> --replicas=2
+```
 
+donde 
 
+- `na` es `namespaces`
+- `rs` es `replicasets`
+- `po` es `pods`
 
+## Deployments
 
+### ¿Qué es un Deployment?
 
+Hasta ahora hemos visto los conceptos de contenedor, Pod y ReplicaSet. Los contenedores están encapsulados en Pods, la unidad mínima de despliegue de k8s, y a su vez los ReplicaSet permiten desplegar el número deseado de pods como instancias/replicas de una misma aplicación.
 
+En un nivel jerarquico superior a los elementos anteriores se sitúan los Deployments. En otras cosas, este objeto de k8s viene a resolver las siguientes funciones:
 
+- Hacer un upgrade sólamente de algunas de las instancias desplegadas. Este tipo de upgrade se denomina `rolling updates` y busca un menor impacto en el acceso de los usuarios.
+- Hacer `rolling back` de los cambios de una nueva versión.
+- Hacer varios cambios a la vez, "haciendo una pausa" en el entorno.
 
+Un `Deployment` no da la capacidad de actualizar sin problemas las instancias subyacentes de la aplicación mediante `rolling updates` (actualizaciones continuas), deshaciendo cambios y deteniendo y volviendo a reanudar cambios cuando se requiera.
 
+### Definir y crear un Deployment
 
+El manifiesto YAML de un Deployment es muy parecido al manifiesto de un ReplicaSet. Crear el archivo `deployment-definition.yaml`:
 
+```yaml
+# deployment-definition.yaml
+apiVersion: apps/v1
+kind: ReplicationSet
+metadata:
+  name: myapp-replicaset
+  labels:
+    app: myapp
+    type: front-end
 
+spec:
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+    spec:
+      containers:
+        - name: nginx-container
+          image: nginx
 
+  replicas: 3
+  selector: 
+    matchLabels:
+      type: front-end
+```
 
+y ejecutar
 
+```bash
+kubectl create -f deployment-definition.yaml
+```
 
+¿Qué ocurre?
 
+- El Deployment crea automáticamente un ReplicaSet
+- El ReplicaSet crea los pods
 
+Otros comandos:
 
+```bash
+kubectl get deployments
+kubectl get replicasets
+kubectl get pods
+kubectl get all
+```
 
+La diferencia fundamental es que el Deployment, además de crear un ReplicaSet, crear el objeto de k8s del mismo nombre.
 
+## Demo. Deployments
 
+[PENDIENTE](todo)
 
+Directorio: `./workspace/demo.deployments`
+
+Laboratorio:
+
+- Levantar tres pods de un nginx a través de un Deployment definido en un YAML.
+
+## Lab. Deployments
+
+Algunos comando útiles:
+
+```bash
+kubectl 
+```
 
 
 
