@@ -877,13 +877,20 @@ La diferencia fundamental es que el Deployment, además de crear un ReplicaSet, 
 
 ## Demo. Deployments
 
-[PENDIENTE](todo)
-
 Directorio: `./workspace/demo.deployments`
 
 Objetivos:
 
 - Levantar tres pods de un nginx a través de un Deployment definido en un YAML.
+- Escalar el número de replicas de 3 a 6.
+
+El escalado lo hacemos editando el YAML temporal mediante el comando
+
+```bash
+kubectl edit deployments.apps myapp-deployment
+```
+
+donde `myapp-deployment` es el nombre del deployment. Sólamente hay que editar el valor de la propiedad `spec.replicas`. No editar los valores del campo `status`.
 
 ## Lab. Deployments
 
