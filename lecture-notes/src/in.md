@@ -969,6 +969,8 @@ Objetivos:
 - Utilizar el flag `--record` en comandos de `kubectl`.
 - Utilizar `kubectl edit` para cambiar la versión de la imagen a una que no exista y luego hacer un `kubectl rollout undo`. Observar que gracias a utilizar la strategía de despliegue `<rolling update>`, el usuario no se queda sin acceso a la aplicación.
 
+Recordar que los cambios realizados con `kubectl edit` no se actualizan en el manifiesto YAML utilizado para hacer el `kubectl create` .
+
 ## Lab. Rolling Updates and Rollbacks
 
 ### Algunos scripts
