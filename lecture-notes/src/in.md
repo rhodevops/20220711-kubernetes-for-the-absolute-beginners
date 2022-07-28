@@ -928,7 +928,7 @@ kubectl apply -f <deployment name>
 El proceso de upgrade es el siguiente:
 
 - Tenemos un Deployment que ha creado el ReplicaSet `rs1`.
-- Al hacer el `apply`, k8s crear un nuevo ReplicaSer `rs2`.
+- Al hacer el `apply`, k8s crear un nuevo ReplicaSet `rs2`.
 - Cuando se levanta un pod de `rs2`, se elimina un pod de `rs1`.
 
 El proceso anterior se puede observar con el comando `kubectl ger replicasets`.
@@ -944,6 +944,8 @@ Investigar si es buena opcion actualizar utilizando el comando:
 ```bash
 kubectl edit deployments.apps <deployment name>
 ```
+
+`¡Cuidado!` El yaml original del deployment no se actualiza. Si cambiamos el valor del número de replicas de 3 a 6 en el archivo temporal del deployment, el yaml del manifiesto original sigue teniendo el valor 3 en el campo `spec.replicas`. 
 
 ### Rollbacks
 
@@ -961,7 +963,66 @@ Directorio: `./workspace/demo.deployments.update-and-rollbak`
 
 Objetivos:
 
-[...]
+- Editar el manifiesto YAML del deployment de la demo anterior para escalar el número de réplicas de 3 a 6, haciendo un `kubectl apply`.
+- Cambiar versiones de la imagen del deployment con el comando `kubectl set image` y tambíen con `kubectl edit`.
+- Utilizar el flag `--record` en comandos de `kubectl`.
+- Utilizar `kubectl edit` para cambiar la versión de la imagen a una que no exista y luego hacer un `kubectl rollout undo`. Observar que gracias a utilizar la strategía de despliegue `<rolling update>`, el usuario no se queda sin acceso a la aplicación.
+
+Para escalar las réplicas:
+
+```bash
+nvim .\deployments.yaml
+kubectk apply -f .\deployments.yaml
+```
+
+Uso de `rollout status`:
+
+```bash
+kubectl edit deployments.apps myapp-deployment
+kubectl rollout status deployment myapp-deployment
+```
+
+Hacer el `rollout status` rápido para observar logs:
+
+```bash
+kubectl delete deployments.apps myapp-deployment
+kubectl create -f .\deployments.yaml
+kubectl rollout status deployment myapp-deployment
+```
+
+Uso del flag `--record` (DEPRECATED) y el comando `rollout history`:
+
+```bash
+kubectl delete deployments.apps myapp-deployment
+kubectl create -f .\deployments.yaml --record
+kubectl edit deployments.apps myapp-deployment --record
+# observar lo que devuelve
+kubectl rollout history deployment myapp-deployment
+kubectl rollout status deployment myapp-deployment
+kubectl describe deployments.apps myapp-deployment
+```
+
+Cambiar la versión de la imagen del deployment, escribiendo una erronea, y hacer un `rollout undo`:
+
+```bash
+> kubectl delete deployments.apps myapp-deployment
+> kubectl create -f .\deployments.yaml --record
+# editar y poner imagen erronea
+> kubectl edit deployments.apps myapp-deployment --record
+# consultar info
+> kubectl rollout status deployment myapp-deployment
+Waiting for deployment "myapp-deployment" rollout to finish: 3 out of 6 new replicas have been updated...
+> kubectl get pods
+> kubectl describe deployments.apps myapp-deployment
+# hacer rollout undo
+> kubectl rollout undo deployment myapp-deployment
+# consultar info
+> kubectl rollout status deployment myapp-deployment
+deployment "myapp-deployment" successfully rolled out
+> kubectl get pods
+```
+
+Recordar que los cambios realizados con `kubectl edit` no se actualizan en el manifiesto YAML utilizado para hacer el `kubectl create` .
 
 ## Lab. Rolling Updates and Rollbacks
 
@@ -1241,3 +1302,18 @@ curl http://192.168.1.4:30008
 
 ## Demo. Services. NodePort
 
+Directorio: `./workspace/demo.services.nodeport`
+
+Objetivos:
+
+- Crear un servicio NodePort para los 6 pods de nginx que se levantaron con el deployment de la demo anterior.
+
+Recordar utilizar correctamente la técnica del `selector` para hacer link a los pods del deployment.
+
+Utilizando minikube, el siguiente comando nos devuelve la url del servicio que hemos creado:
+
+```bash
+minikube service myapp -service --url
+```
+
+donde `myapp` es el label utilizado en el `selector`
