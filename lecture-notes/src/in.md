@@ -877,13 +877,12 @@ La diferencia fundamental es que el Deployment, además de crear un ReplicaSet, 
 
 ## Demo. Deployments
 
-[PENDIENTE](todo)
-
 Directorio: `./workspace/demo.deployments`
 
 Objetivos:
 
 - Levantar tres pods de un nginx a través de un Deployment definido en un YAML.
+- Escalar el número de réplicas de 3 a 6
 
 ## Lab. Deployments
 
@@ -957,8 +956,6 @@ kubectl rollout undo <deployment name>
 El proceso anterior se puede observar con el comando `kubectl ger replicasets`.
 
 ## Demo. Deployments. Update y Rollback
-
-[PENDIENTE](todo)
 
 Directorio: `./workspace/demo.deployments.update-and-rollbak`
 
