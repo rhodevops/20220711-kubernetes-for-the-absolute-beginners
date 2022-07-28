@@ -1306,7 +1306,7 @@ Directorio: `./workspace/demo.services.nodeport`
 
 Objetivos:
 
-- Crear un servicio NodePort para los 6 pods de nginx que se levantaron con el deployment de la demo anterior.
+- Crear un servicio NodePort para los 6 pods de nginx del deployment de la demo anterior.
 
 Recordar utilizar correctamente la técnica del `selector` para hacer link a los pods del deployment.
 
@@ -1317,3 +1317,138 @@ minikube service myapp -service --url
 ```
 
 donde `myapp` es el label utilizado en el `selector`
+
+## Services. ClusterIP
+
+### Contexto y necesidad. Microservicios
+
+Podemos pensar en una aplicación con tres partes diferenciadas:
+
+- `front-end` <-- 3 pods
+- `back-end` <-- 3 pods
+- `redis` <-- 3 pods
+
+Hay que recordar que los pods se crean y se destruyen, son efímeros y por lo tanto las ips no son estáticas, van cambiando.
+
+El frontend necesita comunicarse con el backend y el backend neceita comunicarse con la base de datos. Todas estas comunicaciones se llevan a cabo mediante los `services`. 
+
+Por ejemplo, un servicio creado para los pods del backend ayuda a agrupar todos estos pods y proveer una `interface` a las otras partes para acceder a este servicio. Así, las peticiones son redirijidas a uno de los pods bajo el servicio. 
+
+Esto facilita el despliegue en un clúster de kubernetes de una aplicación basada en microservicios. Cada servicio obtiene una `IP` y un `name` asignado dentro del cluster y es el nombre el que debe ser usado por las otras partes para acceder al servicio. Este tipo de Service es conocido como `ClusterIP`
+
+
+### Definición yaml del servicio ClusterIP
+
+Partimos de un pod creado y definido con el siguiente yaml. Es importante tener en cuenta los `labels` ya que el manifiesto del ClusterIP utiliza un `spec.selector` para hacer el link al pod que corresponda:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels: 
+    app: myapp
+    type: back-end
+
+spec:
+  containers: 
+    - name: nginx-container
+      image: nginx
+```
+
+Para el ClusterIP, se crea el siguiente archivo `service-definition.ymal`. 
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: back-end
+
+spec:
+  type: ClusterIP
+  ports:
+    - targetPort: 80
+      port: 80
+  selector:
+    app: myapp
+    type: back-end
+```
+
+Respecto a los puetos:
+
+- `targetPort` es el puerto donde se expone el backend
+- `port` es el puerto donde se expone el service
+
+Para crear el servicio, se ejecuta:
+
+```bash
+kubectl create -f service-definition.yaml
+```
+
+## Services. Load Balancer
+
+### Contexto y necesidad. 
+
+Vamos a ver otro tipo de Service llamado `Load Balancer`. Ahora nos vamos a centrar en la parte del frontend de un proyecto. En particular tenemos dos aplicaciones frontend, `voting-app` y `result-app`. Se encuentran en un cluster de 4 nodos:
+
+ ```yaml
+cluster:
+  nodos:
+    - nodo: 192.168.56.70
+      - pod: pod1
+        app: votting-app
+    - nodo: 192.168.56.71
+      - pod: pod2
+        app: votting-app
+      - pod: pod3
+        app: votting-app   
+    - nodo: 192.168.56.72
+      - pod: pod4
+        app: result-app
+      - pod: pod5
+        app: result-app
+    - nodo: 192.168.56.73
+      - pod: pod6
+        app: result-app
+```
+
+Para hacer la aplicación accesible a los usuario externos, creamos dos servicios del tipo NodePort: `VotingAppService-30035` y `ResultAppService-31061`. La pregunta ahora es ¿Que url es la que da acceso a los usuarios finales de la aplicación?
+
+- `http://192.168.56.70:30035`
+- `http://192.168.56.71:30035`
+- `http://192.168.56.72:30035`
+- `http://192.168.56.73:30035`
+- `http://192.168.56.70:31061`
+- `http://192.168.56.71:31061`
+- `http://192.168.56.72:31061`
+- `http://192.168.56.73:31061`
+
+Lo que quieren los usuarios finales es algo como esto:
+
+- `http://example-vote.com`
+- `http://example-result.com`
+
+¿Como se logra este tipo de acceso? Una opción es crear una nueva VM como balanceador de carga y configurarla para que dirija el trafico hacia los nodos subyacentes. Esta tarea es bastante tediosa y por lo tanto lo más sencillo es utilizar los balanceadores de carga nativos de las distintintas nubes (AZ, AWS, GCP). 
+
+Kubernetes tiene soporte para la integración de los balanceadores de carga nativos de las distintas nubes. Lo único que hay que hacer es especificar el tipo LoadBalancer en el manifiesto yaml del Service. Ver los detalles en el laboratorio corrspondiente.
+
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-service
+
+spec:
+  type: LoadBalancer
+  ports:
+    - targetPort: 80
+      port: 80
+```
+
+En el caso de que no tenga soporte, como es el caso de Virtual Box, se utilizará como si fuera un NodePort.
+
+
+
+
+
