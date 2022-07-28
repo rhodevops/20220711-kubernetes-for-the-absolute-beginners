@@ -523,7 +523,7 @@ Normalmente, el segundo comando se ejecuta sobre objetos que ya se han creado y 
 
 Directorio: `./workspace/demo.pods-with-yaml`
 
-Laboratorio:
+Objetivos:
 
 - Crear un pod de un nginx utilizando un manifiesto YAML
 
@@ -754,7 +754,7 @@ Hay otras opciones avanzadas de escalado automático basado en la carga.
 
 Directorio: `./workspace/demo.replicasets`
 
-Laboratorio:
+Objetivos:
 
 - Levantar tres pods de un nginx a través de un ReplicaSet definido en un YAML.
 - Eliminar un pod y observar que ocurre.
@@ -881,22 +881,366 @@ La diferencia fundamental es que el Deployment, además de crear un ReplicaSet, 
 
 Directorio: `./workspace/demo.deployments`
 
-Laboratorio:
+Objetivos:
 
 - Levantar tres pods de un nginx a través de un Deployment definido en un YAML.
 
 ## Lab. Deployments
 
-Algunos comando útiles:
+Muy similar al laboratorio de Replica Sets.
+
+## Deployments. Update y Rollback
+
+### Rollout. Control de versiones de los deployments
+
+Cuando se crea un Deployment, se genera un `rollout`. Y cada nuevo rollout crea una nueva revisión del Deployment. Es decir, los rollout mantienen un control de versiones del Deployment. Un rollout vienen dado por algun cambio:
+
+- Nueva verión de la aplicación.
+- Nueva verión del contenedor Docker.
+- Actualizar labels.
+- Actualizar número de réplicas.
+
+Los rollout permiten hacer updates con la posibilidad de revertir los cambios mediante un rollback.
+
+El siguiente comando
 
 ```bash
-kubectl 
+kubectl rollout status <deployment name>
+kubectl rollout history <deployment name>
 ```
 
+permite consultar el estado e historial de rollouts de un Deployment.
 
+### Deployment Strategy
 
+Hay dos tipos de estrategía:
 
+- `Recreate` Destruir todo y crear todo
+- `Rolling Update` (default) Destruir y crear uno a uno
 
+### Upgrades
 
+Una opción para hacer el upgrade es cambiar el manifiesto YAMl del Deployment y ejecutar:
 
+```bash
+kubectl apply -f <deployment name>
+```
+
+El proceso de upgrade es el siguiente:
+
+- Tenemos un Deployment que ha creado el ReplicaSet `rs1`.
+- Al hacer el `apply`, k8s crear un nuevo ReplicaSer `rs2`.
+- Cuando se levanta un pod de `rs2`, se elimina un pod de `rs1`.
+
+El proceso anterior se puede observar con el comando `kubectl ger replicasets`.
+
+Se puede utilizar el siguiente comando para actualizar la versión de la imagen del contenedor:
+
+```bash
+kubectl set image <deployment name> <image name>=<image name>:<nuevo tag>
+```
+
+Investigar si es buena opcion actualizar utilizando el comando:
+
+```bash
+kubectl edit deployments.apps <deployment name>
+```
+
+### Rollbacks
+
+Para hacer un rollback se ejecuta
+
+```bash
+kubectl rollout undo <deployment name>
+```
+
+El proceso anterior se puede observar con el comando `kubectl ger replicasets`.
+
+## Demo. Deployments. Update y Rollback
+
+[PENDIENTE](todo)
+
+Directorio: `./workspace/demo.deployments.update-and-rollbak`
+
+Objetivos:
+
+[...]
+
+## Lab. Rolling Updates and Rollbacks
+
+### Algunos scripts
+
+Mandar múltiples peticiones a la WebApp:
+
+```bash
+cat curl-test.sh 
+for i in {1..35}; do
+   kubectl exec --namespace=kube-public curl -- sh -c 'test=`wget -qO- -T 2  http://webapp-service.default.svc.cluster.local:8080/info 2>&1` && echo "$test OK" || echo "Failed"';
+   echo ""
+done
+```
+
+### Algunos comandos
+
+Algunos comandos útiles:
+
+```bash
+kubectl rollout status <deployment name>
+kubectl rollout history <deployment name>
+```
+
+# Networking en Kubernetes
+
+## Cluster de un solo nodo
+
+Punto de partida. Tenemos un cluster de un solo nodo. En un principio, existe un único pod con un contenedor:
+
+- nodo <-- ip `192.168.1.2`
+  - PNet  <-- ip `10.244.0.0`
+  - pod 1 (aloja 1 contenedor) <-- ip `10.244.0.2`
+
+Es fundamental tener claro lo siguiente. A diferencia que en Docker, donde la `IP` se asigna al contendor, en kubernetes la `IP` se asigna al pod, independientemente del número de contendores que contenga. 
+
+En el caso de `minikube` (1 solo nodo, local), la `IP` del nodo se corresponde con la `IP` de la vm dentro del hypervisor. Como solo hay un nodo, se le llama `minikube node`. El ordenador del sistema tendra otra dirección `IP`.
+
+Cuando se inicia Kubernetes, se crea una Private Network interna con la dirección IP `10.244.0.0` y todos los pods se conectan a ella. 
+
+Cuando se despliegan múltiples pods, todos ellos tienen una `IP` diferente dentro de esta red:
+
+- pod 1 <-- `10.244.0.2`
+- pod 2 <-- `10.244.0.3`
+- pod 3 <-- `10.244.0.4`
+
+Aunque los pods anteriores pueden comunicarse a través de estas direcciones ip, esto no es una buena idea. Más adelante veremos otra forma más apropiada.
+
+## Cluster de varios nodos
+
+Punto de partida. Tenemos dos nodos. En un principio están aíslado y no forman parte de un clúster:
+
+- nodo A <-- ip `192.168.1.2`
+  - PNet  <-- ip `10.244.0.0`
+  - pod 1 (aloja 1 contenedor) <-- ip `10.244.0.2`
+
+- nodo B <-- ip `192.168.1.3`
+  - PNet  <-- ip `10.244.0.0`
+  - pod 1 (aloja 1 contenedor) <-- ip `10.244.0.2`
+
+El primer problema a resolver es que las PNet internas de los nodos tienen las mismas direcciones. Respecto a la red de k8s, existen unos requisitos fundamentales. Algunos de estos son:
+
+- Todos los pods y contenedores del clúster tienen que poder comunicarse entre ellos sin la configuración de un NAT.
+- Todos los nodos del clúster tienen que poder comunicarse con los contenedores y todos los contenedores tienen que poder comunicarse con los nodos sin la configuración de un NAT.
+
+`CNI` (Container Network Interface) es un proyecto de la `Cloud Native Computing Foundation`. Consiste en un conjunto de específicaciones y librerías para escribir plugins de configuración de interfaces de red en contenedores Linux.
+
+Hay múltiples soluciones pre-construídas para Kubernetes:
+
+- Cisco ACI (Application Centric Infrastructure)
+- Cilium
+- Flannel
+- VMWare NSX-T
+- Calico
+
+Estas soluciones crean una Virtual Network que aloja a todos los nodos y pods y asigna direcciones IP únicas dentro del cluster, mediante técnicas básicas de `routing`:
+
+- nodo A <-- ip `192.168.1.2`
+  - PNet  <-- ip `10.244.0.0`
+  - pod 1 (aloja 1 contenedor) <-- ip `10.244.0.2`
+
+- nodo B <-- ip `192.168.1.3`
+  - PNet  <-- ip `10.244.1.0`
+  - pod 1 (aloja 1 contenedor) <-- ip `10.244.1.2`
+
+# Services
+
+Los `Services` de k8s permiten establecer la comunicación entre componentes internos y externos de la aplicación y conectar con los usuarios u otras aplicaciones.
+
+## Services. Node Port
+
+### Contexto y necesidad
+
+Podemos pensar en una aplicación que tiene grupos de pods ejecutándose en varias partes:
+
+- Un primer grupo de pods hace el servicio de carga del frontend a los usuarios.
+- Un segundo grupo de pods ejecuta los procesos del backend.
+- Un tercer grupo de pods hace la conexión con una base de datos externa.
+
+Todas estas comunicaciones y acoplamientos se llevan a cabo mediante los `services`.
+
+Vamos a imaginarnos el siguiente escenario. Tenemos un clúster de un nodo donde se ha desplegado un pod que ejecuta una página web:
+
+```yaml
+net: 
+  ip: 192.168.1.0
+  cluster:
+    - nodo: 192.168.1.2
+      pnet: 10.244.0.0
+        - pod: 10.244.0.2
+  laptop: 192.168.1.10
+```
+
+Hay que tener claro que:
+
+- Desde el ordenador, no puedo hacer ping o acceder al puerto `10.244.0.2` (porque está en una red separada).
+- Desde el nodo (ssh desde el ordenador), puedo hacer un curl a la página web.
+
+```bash
+# from laptop
+> ssh 192.168.1.2
+> curl http://10.244.0.2
+hello world
+```
+
+Pero lo que deseamos es poder acceder a la página web desde el ordenador sin necesidad de hacer ssh al nodo del cluster. Para ello se necesita tener algo en el medio que nos ayude a mapear las peticiones desde el ordenador a través del nodo hasta el pod que ejecuta el contenedor web. Y aquí es donde entra en juego el `Service` de kubernetes.
+
+Un `Service` es un objeto de k8s que permite servir la aplicación al exterior del clúster. Una forma de hacerlo es escuchar a través de un puerto (`30008`) situado en el nodo (`192.168.1.2`) y reenviar solicitudes en ese puerto al pod donde se ejecuta la aplicación web.
+
+```bash
+# from laptop
+> curl http://192.168.1.2:30008
+hello world
+```
+
+Este tipo de Service se denomina `NodePort` ya que el servicio escucha en un puerto del nodo y reenvía las peticiones a los pods. Pero no es el único tipo, existen otro tipos de Services:
+
+- `NodePort`
+- `ClusterIP`
+- `LoadBalancer`
+
+### Node Port
+
+Tenemos el siguiente cluster donde se ejecuta una WebApp. Los términos `port` y `targetPort` se emplean desde el punto de vista del Service:
+
+```yaml
+cluster:
+  service:
+    clusterIP: 10.162.1.12
+    port: 80
+  nodos:
+    - nodo: 192.168.1.2
+      nodePort: 30008   
+      pnet: 10.244.0.0
+        - pod: 10.244.0.2
+          targetPort: 80
+```
+
+El camino de la petición de un usuario `NodePort - Service - Port/TargetPort - Pod`.
+
+El `Service` puede verse como un `virtual server` dentro del nodo, dentro del cluster. Tiene su propia dirección `IP` que se denomina `ClusterIP of the Service`.
+
+El rango válido del `NodePort` va desde 30000 hasta 32767.
+
+### Definición yaml del servicio NodePort
+
+Partimos de un pod creado y definido con el siguiente yaml. Es importante tener en cuenta los `labels` ya que el manifiesto del NodePort utiliza un `spec.selector` para hacer el link al pod que corresponda:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels: 
+    app: myapp
+    type: front-end
+
+spec:
+  containers: 
+    - name: nginx-container
+      image: nginx
+```
+
+Para el NodePort, se crea el siguiente archivo `service-definition.ymal`. 
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-service
+
+spec:
+  type: NodePort
+  ports:
+    - targetPort: 80
+      port: 80
+      nodePort: 30008
+  selector:
+    app: myapp
+    type: front-end
+```
+
+Se pueden tener múltiples mapeos de puertos utilizando un único Service.
+
+Es importante aclarar que no importa que existan cientos de pods con otras WebApps ejecutándose en el puerto `80` ya que la técnica que se utiliza para hacer el link con los pods es la del `selector`.
+
+El único puerto requerido es `port`. Los valores por defecto si no se especifican son los siguientes:
+
+- `targetPort` el mismo que `port`
+- `nodePort` "aleatorio" en el rango adecuado
+
+Una vez que se ha codificado el archivo yaml, se utiliza la siguiente orden para crear el servivio:
+
+```bash
+kubectl create -f service-definition.yaml
+```
+
+Otros comandos:
+
+```bash
+kubectl get services
+```
+
+Ahora se puedo utilizar este puerto para acceder al servicio web usando un curl o un navegador web:
+
+```bash
+curl http://<nodo IP>:<nodePort>
+```
+
+### NodePort con múltiples pods en un solo nodo
+
+En un entorno de producción, se tienen múltiples instancias de la aplicación web ejecutándose para tener alta disponibilidad y balancear la cargas. En este caso se tienen varios pods réplicas que ejecutan la WebApp.
+
+Dado que el servicio `NodePort` utiliza la técnica del `selector` para seleccionar los pods, basta con utilizar un mismo label en todos los pods para que el servicio haga el link de los pods considerados. Además, el Service crea automáticamente un balanceo de carga que no tenemos que configurar.
+
+Como curiosidad, el algoritmo utilizado en el balanceo es el siguiente:
+
+ - Algorithm `Random`
+ - SessionAffinity `Yes`
+
+ ### NodePort con pods distribuidos en varios nodos
+
+ En este caso tampoco hay que hacer ninguna configuración adicional, sino que k8s lo hacer por nosotros automáticamente.
+
+ Podemos tener el siguiente escenario:
+
+ ```yaml
+cluster:
+  service:
+    clusterIP: 10.162.1.12
+    port: 80
+  nodos:
+    - nodo: 192.168.1.2
+      nodePort: 30008   
+      pods:
+        - pod: 10.244.0.2
+          targetPort: 80
+    - nodo: 192.168.1.3
+      nodePort: 30008   
+      pods:
+        - pod: 10.244.0.3
+          targetPort: 80
+    - nodo: 192.168.1.4
+      nodePort: 30008   
+      pods:
+        - pod: 10.244.0.4
+          targetPort: 80
+```
+
+Para hacer el curl a la aplicación web se puede utilizar cualquier de la siguientes variantes:
+
+```bash
+curl http://192.168.1.2:30008
+curl http://192.168.1.3:30008
+curl http://192.168.1.4:30008
+```
+
+## Demo. Services. NodePort
 
