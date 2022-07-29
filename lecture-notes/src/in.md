@@ -1430,7 +1430,7 @@ Lo que quieren los usuarios finales es algo como esto:
 
 ¿Como se logra este tipo de acceso? Una opción es crear una nueva VM como balanceador de carga y configurarla para que dirija el trafico hacia los nodos subyacentes. Esta tarea es bastante tediosa y por lo tanto lo más sencillo es utilizar los balanceadores de carga nativos de las distintintas nubes (AZ, AWS, GCP). 
 
-Kubernetes tiene soporte para la integración de los balanceadores de carga nativos de las distintas nubes. Lo único que hay que hacer es especificar el tipo LoadBalancer en el manifiesto yaml del Service. Ver los detalles en el laboratorio corrspondiente.
+Kubernetes tiene soporte para la integración de los balanceadores de carga nativos de las distintas nubes. Lo único que hay que hacer es especificar el tipo LoadBalancer en el manifiesto yaml del Service. 
 
 
 ```yaml
@@ -1448,7 +1448,97 @@ spec:
 
 En el caso de que no tenga soporte, como es el caso de Virtual Box, se utilizará como si fuera un NodePort.
 
+## Lab. Services
 
+Muy parecido a los laboratorios anteriores.
 
+# Arquitectura de los microservicios
 
+## Aplicación basada en microservicios
 
+Tenemos una `application stack` con los siguiente componentes y flujo de datos `1 - 5`:
+
+1. `voting-app` python <-- intefaz web pata votar
+2. `in-memory DB` redis 
+3. `worker` .NET <-- procesa el voto, actualiza la db
+4. `db` postgreSQL <-- persistencia
+5. `result-app` nodejs <-- interfaz web que muestra los resultados
+
+Suponemos que tenemos las imágenes de docker de los 5 servicios construídas y disponibles en un repositorio.
+
+Levantamos los contenedores correspondiente. Es muy importante dar un nombre específico a los contendores, en seguida se verá por qué:
+
+```bash
+docker run -d --name=redis-ctner redis 
+docker run -d --name=db-ctner postgres:9.4
+docker run -d --name=vote -p 5000:80 voting-app
+docker run -d --name=result -p 5001:80  voting-app
+docker run -d --name=worker worker
+```
+
+Los comandos anteriores no son suficiente para que la `application stack` funcione correctamente, pues los contenedores no se están comunicando entre ellos. Aquí es donde entran en juego los `links`. Para hacer link hay que hacer uso de los nombres de los contenedores:
+
+```bash
+docker run -d --name=redis-ctner redis 
+docker run -d --name=db-ctner postgres:9.4
+docker run -d --name=vote -p 5000:80 --link redis-ctner:redis voting-app
+docker run -d --name=result -p 5001:80 -link db-ctner:db voting-app
+docker run -d --name=worker --link db-ctner:db --link redis-ctner:redis worker
+```
+
+Analizamos el comando `docker run -d --name=vote-ctner -p 5000:80 --link redis-ctner:redis voting-app`
+
+- `vote` es el nombre del contenedor que se levanta
+- `voting-app` es el nombre de la imagen utilizada
+- `redis-ctner` es el nombre del contenedor (es habitual que se llame simplemente `redis`) con el que se quiere vincular el contenedor `vote-ctner` mientras que `redis` es el nombre del host que la aplicación `voting-app` está buscando, lo que implica que `redis` será el nombre el nombre para el `service`. `¿?`
+
+El código de `voting-app` incluye algo como lo siguiente:
+
+```python
+def get_redis():
+  if not hasttr(g, 'redis'):
+    g.redis = Redis(host="redis", db=0, socket_timeout=5)
+  return g.redis
+```
+
+Notas:
+
+- Aquí se utiliza código hardcodeado
+- Las buenas prácticas utilizan variables de entorno o algo similar
+
+## Aplicación basada en microservicios en Kubernetes
+
+Tenemos una `application stack` con los siguiente componentes y flujo de datos `1 - 5`:
+
+1. `voting-app` python <-- intefaz web pata votar
+2. `in-memory DB` redis 
+3. `worker` .NET <-- procesa el voto, actualiza la db
+4. `db` postgreSQL <-- persistencia
+5. `result-app` nodejs <-- interfaz web que muestra los resultados
+
+Objetivos que nos marcamos:
+
+- Desplegar los contenedores en un clúster de kubernetes.
+- Habilitar la conexión entre los contenedores para que se comuniquen la aplicaciones y las bases de datos.
+- Habilitar un acceso externo para que los usuarios finales puedan utilizar las aplicaciones.
+
+Hay que tener claro los accesos requeridos:
+
+- Los usuarios finales deben acceder a las aplicaciones `voting-app` (80) y `result-app` (80) <-- acceso externo
+- `voting-app` debe acceder a `redis` (6379) <-- acceso interno
+- `reault-app` debe acceder a `postgres` (5432) <-- acceso interno
+- `worker` debe acceder a `redis` (6379) y `postgres` (5432) <-- acceso interno
+
+Por lo tanto, se necesitan `services` para todo excepto el `worker`.
+
+Pasos que tenemos que seguir:
+
+1. Desplegar los pods (pods, replicasets o deployments)
+2. Crear los `services` (ClusterIP) <-- acceso interno
+  1. redis
+  2. db
+3. Crear los `services` (NodePort) <-- acceso externo
+  1. voting-app
+  2. result-app
+
+## Demo. Deploying Microservices Application on Kubernetes
