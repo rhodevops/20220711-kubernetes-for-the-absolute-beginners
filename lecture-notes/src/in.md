@@ -1542,3 +1542,6 @@ Pasos que tenemos que seguir:
   2. result-app
 
 ## Demo. Deploying Microservices Application on Kubernetes
+
+Directorio: `./workspace/demo.voting-app`
+
